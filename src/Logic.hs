@@ -1,7 +1,9 @@
 {-# LANGUAGE InstanceSigs #-}
 module Logic(BoardDotStat,boardDotStatCons,
              WholeBoard,initWholeBoard,getDotStat,
-             moveCursor,placePawnAtCursor,enemyPlacePawn) where 
+             WholeState,initWholeState,
+             moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,
+             fetchWholeState) where 
 
 import Tools(set2DList)
 
@@ -98,13 +100,14 @@ getCorrespondentPawn playerSide isMyTurn = case playerSide of
 
 
 data WinStat = IWin|EnemyWin|InGame
-    deriving (Show)
+    deriving (Eq,Show)
 
 data WholeState = WholeState WholeBoard PlayerSide (Int,Int) Bool WinStat
     deriving (Show)
 
-wholeStateCons::Int->PlayerSide->WholeState
-wholeStateCons size playerSide = WholeState (initWholeBoard size) playerSide (0,0) (playerSide==BlackPlayer) InGame
+initWholeState::Int->Char->WholeState
+initWholeState size playerSideCh = WholeState (initWholeBoard size) playerSide (0,0) (playerSide==BlackPlayer) InGame
+    where playerSide=if playerSideCh=='b' then BlackPlayer else WhitePlayer
 
 data Direction = DirUp|DirDown|DirLeft|DirRight
     deriving (Show,Eq)
@@ -118,26 +121,28 @@ getDirVector direction = case direction of
      
 placePawn::WholeState->(Int,Int)->Bool->Either String WholeState  --place a new pawn on the board, the 3rd argument indicated whether the player place his pawn, or enemy places his pawn
 placePawn (WholeState wb@(WholeBoard size wholeBoard) pside (cursorY,cursorX) whoseTurn winS) (y,x) isMyPawn = do
-    if whoseTurn==isMyPawn 
-    then do
-        let originPawn = getDotStat wb y x
-        case originPawn of
-            Left errorMsg->if isMyPawn then Left ("cannot place pawn here because "++errorMsg) else Left ("enemy cheating: "++errorMsg)
-            Right bds->do
-                if not (bds==EmptyDot)
-                    then Left("cannot place pawn at "++show y++","++show x++" because here is not empty")
-                else do
-                    let pawnToPlace = getCorrespondentPawn pside isMyPawn
-                    let newWholeBoard = setDotStat wb y x pawnToPlace 
-                    case newWholeBoard of
-                        Left errorMsg-> Left ("unexpected situation: "++errorMsg) -- this is never expected to happen when code runs
-                        Right newWB -> do
-                            let placerWin = isWin newWB pawnToPlace (y,x)
-                            let newWS = if placerWin then (if isMyPawn then IWin else EnemyWin) else InGame
-                            Right (WholeState newWB pside (cursorY,cursorX) (not whoseTurn) newWS)
-    else
-        Left ("It should be "++getPlayer whoseTurn++"'s turn, "++getPlayer isMyPawn++" cannot move now")
-        where getPlayer b= if b then "player" else "enemy" 
+    if winS==InGame then do    
+        if whoseTurn==isMyPawn 
+        then do
+            let originPawn = getDotStat wb y x
+            case originPawn of
+                Left errorMsg->if isMyPawn then Left ("cannot place pawn here because "++errorMsg) else Left ("enemy cheating: "++errorMsg)
+                Right bds->do
+                    if not (bds==EmptyDot)
+                        then Left("cannot place pawn at "++show y++","++show x++" because here is not empty")
+                    else do
+                        let pawnToPlace = getCorrespondentPawn pside isMyPawn
+                        let newWholeBoard = setDotStat wb y x pawnToPlace 
+                        case newWholeBoard of
+                            Left errorMsg-> Left ("unexpected situation: "++errorMsg) -- this is never expected to happen when code runs
+                            Right newWB -> do
+                                let placerWin = isWin newWB pawnToPlace (y,x)
+                                let newWS = if placerWin then (if isMyPawn then IWin else EnemyWin) else InGame
+                                Right (WholeState newWB pside (cursorY,cursorX) (not whoseTurn) newWS)
+        else
+            Left ("It should be "++getPlayer whoseTurn++"'s turn, "++getPlayer isMyPawn++" cannot move now")
+    else Left ("Game already ends with "++show winS)
+    where getPlayer b= if b then "player" else "enemy" 
 
 moveCursor::WholeState->Direction->WholeState
 moveCursor (WholeState wb@(WholeBoard size wholeBoard) pside (cursorY,cursorX) whoseTurn ws) dir= do
@@ -146,8 +151,15 @@ moveCursor (WholeState wb@(WholeBoard size wholeBoard) pside (cursorY,cursorX) w
     let xNew = max 0 (min (size-1) (cursorX+dirX))
     (WholeState wb pside (yNew,xNew) whoseTurn ws)
 
+iPlacePawn::WholeState->(Int,Int)->Either String WholeState
+iPlacePawn ws (y,x)=placePawn ws (y,x) True
+
 placePawnAtCursor::WholeState->Either String WholeState
 placePawnAtCursor ws@(WholeState (WholeBoard size wholeBoard) pside (cursorY,cursorX) whoseTurn winS)=placePawn ws (cursorY,cursorX) True
 
 enemyPlacePawn::WholeState->(Int,Int)->Either String WholeState
 enemyPlacePawn ws (y,x)=placePawn ws (y,x) False
+
+fetchWholeState::Either String WholeState->WholeState
+fetchWholeState (Left errMsg) = error errMsg
+fetchWholeState (Right ws) = ws
