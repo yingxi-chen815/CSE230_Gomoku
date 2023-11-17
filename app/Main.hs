@@ -8,5 +8,4 @@ import Logic(BoardDotStat,boardDotStatCons,initWholeBoard)
 main::IO ()
 main = do
     hSetEncoding stdout utf8
-    putStrLn (show (boardDotStatCons 'b'))
-    putStrLn (show (initWholeBoard 4))
+    

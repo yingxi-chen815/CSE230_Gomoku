@@ -1,6 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 module Logic(BoardDotStat,boardDotStatCons,
-             WholeBoard,initWholeBoard) where 
+             WholeBoard,initWholeBoard,getDotStat,
+             moveCursor,placePawnAtCursor,enemyPlacePawn) where 
 
 import Tools(set2DList)
 
@@ -68,6 +69,7 @@ setDotStat (WholeBoard size wholeBoard) row col newState = do
         then Right (WholeBoard size (set2DList wholeBoard row col newState))
     else Left (show row++","++show col++" is already occupied")
 
+--count how many connected black/white pawns there are from (y,x) towards (yDir,xDir) direction
 countPawn::WholeBoard->BoardDotStat->(Int,Int)->(Int,Int)->Int
 countPawn (WholeBoard size wholeBoard) bds (y,x) (yDir,xDir) = do
     if y<0||y>=size||x<0||x>=size
@@ -82,23 +84,27 @@ countPawnBiDir wb bds (y,x) (yDir,xDir) = (countPawn wb bds (y,x) (yDir,xDir))+(
 -- >>> countPawnBiDir (WholeBoard 4 (fromStrings ["bbww",".bbw","..wb","..bw"])) BlackPawn (1,2) (0,1)
 -- 2
 
-data PlayerSide = BlackPlayer|WhitePlayer
-    deriving (Show)
+--if there are 5 connected bds-pawns through one of 4 directions, somebody wins
+isWin::WholeBoard->BoardDotStat->(Int,Int)->Bool
+isWin wb bds (y,x) = foldl (\res dir->res||((countPawnBiDir wb bds (y,x) dir)>=5)) False [(1,0),(0,1),(1,1),(-1,1)]
 
-getCorrespondentPawn::PlayerSide->BoardDotStat
-getCorrespondentPawn playerSide = case playerSide of 
-    BlackPlayer->BlackPawn
-    WhitePlayer->WhitePawn
+data PlayerSide = BlackPlayer|WhitePlayer
+    deriving (Eq,Show)
+
+getCorrespondentPawn::PlayerSide->Bool->BoardDotStat
+getCorrespondentPawn playerSide isMyTurn = case playerSide of 
+    BlackPlayer->if isMyTurn then BlackPawn else WhitePawn
+    WhitePlayer->if isMyTurn then WhitePawn else BlackPawn
 
 
 data WinStat = IWin|EnemyWin|InGame
     deriving (Show)
 
-data WholeState = WholeState WholeBoard PlayerSide (Int,Int) WinStat
+data WholeState = WholeState WholeBoard PlayerSide (Int,Int) Bool WinStat
     deriving (Show)
 
 wholeStateCons::Int->PlayerSide->WholeState
-wholeStateCons size playerSide = WholeState (initWholeBoard size) playerSide (0,0) InGame
+wholeStateCons size playerSide = WholeState (initWholeBoard size) playerSide (0,0) (playerSide==BlackPlayer) InGame
 
 data Direction = DirUp|DirDown|DirLeft|DirRight
     deriving (Show,Eq)
@@ -109,12 +115,39 @@ getDirVector direction = case direction of
     DirDown->(1,0)
     DirLeft->(0,-1)
     DirRight->(0,1)
+     
+placePawn::WholeState->(Int,Int)->Bool->Either String WholeState  --place a new pawn on the board, the 3rd argument indicated whether the player place his pawn, or enemy places his pawn
+placePawn (WholeState wb@(WholeBoard size wholeBoard) pside (cursorY,cursorX) whoseTurn winS) (y,x) isMyPawn = do
+    if whoseTurn==isMyPawn 
+    then do
+        let originPawn = getDotStat wb y x
+        case originPawn of
+            Left errorMsg->if isMyPawn then Left ("cannot place pawn here because "++errorMsg) else Left ("enemy cheating: "++errorMsg)
+            Right bds->do
+                if not (bds==EmptyDot)
+                    then Left("cannot place pawn at "++show y++","++show x++" because here is not empty")
+                else do
+                    let pawnToPlace = getCorrespondentPawn pside isMyPawn
+                    let newWholeBoard = setDotStat wb y x pawnToPlace 
+                    case newWholeBoard of
+                        Left errorMsg-> Left ("unexpected situation: "++errorMsg) -- this is never expected to happen when code runs
+                        Right newWB -> do
+                            let placerWin = isWin newWB pawnToPlace (y,x)
+                            let newWS = if placerWin then (if isMyPawn then IWin else EnemyWin) else InGame
+                            Right (WholeState newWB pside (cursorY,cursorX) (not whoseTurn) newWS)
+    else
+        Left ("It should be "++getPlayer whoseTurn++"'s turn, "++getPlayer isMyPawn++" cannot move now")
+        where getPlayer b= if b then "player" else "enemy" 
 
 moveCursor::WholeState->Direction->WholeState
-moveCursor (WholeState wb@(WholeBoard size wholeBoard) pside (cursorY,cursorX) ws) dir= do
+moveCursor (WholeState wb@(WholeBoard size wholeBoard) pside (cursorY,cursorX) whoseTurn ws) dir= do
     let (dirY,dirX) = getDirVector(dir)
     let yNew = max 0 (min (size-1) (cursorY+dirY))
     let xNew = max 0 (min (size-1) (cursorX+dirX))
-    (WholeState wb pside (yNew,xNew) ws)
-     
+    (WholeState wb pside (yNew,xNew) whoseTurn ws)
 
+placePawnAtCursor::WholeState->Either String WholeState
+placePawnAtCursor ws@(WholeState (WholeBoard size wholeBoard) pside (cursorY,cursorX) whoseTurn winS)=placePawn ws (cursorY,cursorX) True
+
+enemyPlacePawn::WholeState->(Int,Int)->Either String WholeState
+enemyPlacePawn ws (y,x)=placePawn ws (y,x) False
