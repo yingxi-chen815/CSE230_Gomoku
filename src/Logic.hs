@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 module Logic(BoardDotStat,boardDotStatCons,
              WholeBoard,initWholeBoard,getDotStat,
-             WholeState,initWholeState,
+             WholeState(..),initWholeState,
              moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,
              fetchWholeState) where 
 
