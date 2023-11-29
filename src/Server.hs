@@ -59,11 +59,15 @@ gameLoop blackHandle whiteHandle (Right newState) isMyTurn = do
         case eitherNewState of
             Right newState' -> do
                 putStrLn $ "Received coordinate: " ++ show coord
-                putStrLn $ "Updated board state: " ++ show (fetchWholeState (Right newState'))
+                putStrLn $ "Updated board state: \n" ++ show (fetchWholeState (Right newState'))
+                hPutStrLn blackHandle $ "Updated board state: \n" ++ serializeWholeState (fetchWholeState (Right newState'))
+                hPutStrLn whiteHandle $ "Updated board state: \n" ++ serializeWholeState (fetchWholeState (Right newState'))
+                putStrLn $ "Serialized board state: \n" ++ serializeWholeState (fetchWholeState (Right newState'))
                 gameLoop blackHandle whiteHandle (Right newState') (not isMyTurn)
             Left errorMsg -> do
                 hPutStrLn currentHandle $ "Error: " ++ errorMsg
                 gameLoop blackHandle whiteHandle (Right newState) isMyTurn
+
 gameLoop _ _ (Left errorMsg) _ = putStrLn $ "Error: " ++ errorMsg
 
 parseCoordinate :: String -> Coordinate
@@ -80,38 +84,15 @@ serializeWholeState (WholeState board player (x, y) flag winStat) =
     show flag ++ ";" ++
     show winStat
 
+serializeBoardDotStat :: BoardDotStat -> String
+serializeBoardDotStat BlackPawn = "1"
+serializeBoardDotStat WhitePawn = "2"
+serializeBoardDotStat EmptyDot = "3"
+
 serializeWholeBoard :: WholeBoard -> String
 serializeWholeBoard (WholeBoard size board) =
-    show size ++ ";" ++
-    intercalate "," (map serializeBoardDotStat board)
-
-serializeBoardDotStat :: BoardDotStat -> String
-serializeBoardDotStat (Left errorMsg) = "0"
-serializeBoardDotStat (Right BlackPawn) = "1"
-serializeBoardDotStat (Right WhitePawn) = "2"
-serializeBoardDotStat (Right EmptyDot) = "3"
+    show size ++ ";" ++ intercalate "," (concatMap (map serializeBoardDotStat) board)
 
 
 
-deserializeWholeState :: String -> WholeState
-deserializeWholeState s = let [boardStr, playerStr, cursorStr, flagStr, winStatStr] = splitOn ";" s
-                              board = deserializeWholeBoard boardStr
-                              player = read playerStr :: PlayerSide
-                              cursor = parseCoordinate cursorStr
-                              flag = read flagStr :: Bool
-                              winStat = read winStatStr :: WinStat
-                          in WholeState board player cursor flag winStat
-
-deserializeWholeBoard :: String -> WholeBoard
-deserializeWholeBoard s = let [sizeStr, boardStr] = splitOn ";" s
-                              size = read sizeStr :: Int
-                              board = map deserializeBoardDotStat $ splitOn "," boardStr
-                          in WholeBoard size board
-
-deserializeBoardDotStat :: String -> BoardDotStat
-deserializeBoardDotStat "0" = Left "Invalid board dot stat"
-deserializeBoardDotStat "1" = Right BlackPawn
-deserializeBoardDotStat "2" = Right WhitePawn
-deserializeBoardDotStat "3" = Right EmptyDot
-deserializeBoardDotStat _ = Left "Invalid board dot stat"
 
