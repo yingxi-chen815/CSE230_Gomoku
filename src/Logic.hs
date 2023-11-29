@@ -4,7 +4,7 @@ module Logic(BoardDotStat(..),boardDotStatCons,
              WholeState(..),initWholeState,getCorrespondentPawn,
              moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,placePawn,
              fetchWholeState,
-             PlayerSide(..), WinStat(..), fetchWinStat) where 
+             PlayerSide(..), WinStat(..), fetchWinStat,fetchTurn) where 
 
 import Tools(set2DList)
 
@@ -170,3 +170,7 @@ fetchWholeState (Right ws) = ws
 fetchWinStat::Either String WholeState->WinStat
 fetchWinStat (Left errMsg) = error errMsg
 fetchWinStat (Right (WholeState _ _ _ _ ws)) = ws
+
+fetchTurn::Either String WholeState->Bool
+fetchTurn (Left errMsg) = error errMsg
+fetchTurn (Right (WholeState _ _ _ whoseTurn _)) = whoseTurn
