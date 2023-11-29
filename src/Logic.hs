@@ -4,7 +4,7 @@ module Logic(BoardDotStat(..),boardDotStatCons,
              WholeState(..),initWholeState,getCorrespondentPawn,
              moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,placePawn,
              fetchWholeState,
-             PlayerSide, WinStat) where 
+             PlayerSide(..), WinStat(..), fetchWinStat) where 
 
 import Tools(set2DList)
 
@@ -51,6 +51,8 @@ initWholeBoard size = WholeBoard size (replicate size (createRow size))
 
 -- >>> getDotStat (initWholeBoard 4) 2 1 
 -- Right 🔶
+--
+
 
 getDotStat::WholeBoard->Int->Int->Either String BoardDotStat 
 getDotStat (WholeBoard size wholeBoard) row col = do
@@ -164,3 +166,7 @@ enemyPlacePawn ws (y,x)=placePawn ws (y,x) False
 fetchWholeState::Either String WholeState->WholeState
 fetchWholeState (Left errMsg) = error errMsg
 fetchWholeState (Right ws) = ws
+
+fetchWinStat::Either String WholeState->WinStat
+fetchWinStat (Left errMsg) = error errMsg
+fetchWinStat (Right (WholeState _ _ _ _ ws)) = ws

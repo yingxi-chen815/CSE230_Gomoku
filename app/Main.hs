@@ -18,4 +18,5 @@ main = do
         ["server"] -> startServer
         -- ["client", host, port] -> startClient host port
         ["client"] -> startClient "127.0.0.1" "3000"
+        -- ["client"] -> startClient "https://super-duper-orbit-4vpvv7xw7pgcq4p6-3000.app.github.dev/" "3000"
         _ -> putStrLn "Invalid arguments"
