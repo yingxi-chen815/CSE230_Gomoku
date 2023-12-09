@@ -1,0 +1,3 @@
+challenges:
+1. The core login of complex rules to check whether a player has won the game
+2. How to write test code to ensure these code are correct
