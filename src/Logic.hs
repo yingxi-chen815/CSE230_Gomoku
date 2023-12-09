@@ -1,9 +1,9 @@
 {-# LANGUAGE InstanceSigs #-}
 module Logic(BoardDotStat,boardDotStatCons,
-             WholeBoard,initWholeBoard,getDotStat,
-             WholeState,initWholeState,
+             WholeBoard(..),initWholeBoard,getDotStat,
+             WholeState(..),initWholeState,Direction(..),
              moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,
-             fetchWholeState) where 
+             fetchWholeState, concatRowToStr) where 
 
 import Tools(set2DList)
 
