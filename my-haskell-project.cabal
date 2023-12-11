@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -24,7 +24,9 @@ source-repository head
 
 library
   exposed-modules:
+      Client
       Logic
+      Server
       Tools
       UI
   other-modules:
@@ -37,6 +39,8 @@ library
   build-depends:
       base >=4.7 && <5
     , brick
+    , network >=3.1.2.8
+    , split
     , text
     , vty
   default-language: Haskell2010
@@ -54,6 +58,8 @@ executable my-haskell-project-exe
       base >=4.7 && <5
     , brick
     , my-haskell-project
+    , network >=3.1.2.8
+    , split
     , text
     , vty
   default-language: Haskell2010
@@ -72,6 +78,8 @@ test-suite my-haskell-project-test
       base >=4.7 && <5
     , brick
     , my-haskell-project
+    , network >=3.1.2.8
+    , split
     , text
     , vty
   default-language: Haskell2010

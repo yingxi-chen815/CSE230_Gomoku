@@ -1,9 +1,11 @@
 {-# LANGUAGE InstanceSigs #-}
-module Logic(BoardDotStat,boardDotStatCons,
+module Logic(BoardDotStat(..),boardDotStatCons,
              WholeBoard(..),initWholeBoard,getDotStat,
-             WholeState(..),initWholeState,Direction(..),
-             moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,
-             fetchWholeState, concatRowToStr) where 
+             WholeState(..),initWholeState,getCorrespondentPawn,
+             moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,placePawn,
+             fetchWholeState,
+             Direction(..),
+             PlayerSide(..), WinStat(..), fetchWinStat,fetchTurn) where 
 
 import Tools(set2DList)
 
@@ -50,6 +52,8 @@ initWholeBoard size = WholeBoard size (replicate size (createRow size))
 
 -- >>> getDotStat (initWholeBoard 4) 2 1 
 -- Right 🔶
+--
+
 
 getDotStat::WholeBoard->Int->Int->Either String BoardDotStat 
 getDotStat (WholeBoard size wholeBoard) row col = do
@@ -163,3 +167,11 @@ enemyPlacePawn ws (y,x)=placePawn ws (y,x) False
 fetchWholeState::Either String WholeState->WholeState
 fetchWholeState (Left errMsg) = error errMsg
 fetchWholeState (Right ws) = ws
+
+fetchWinStat::Either String WholeState->WinStat
+fetchWinStat (Left errMsg) = error errMsg
+fetchWinStat (Right (WholeState _ _ _ _ ws)) = ws
+
+fetchTurn::Either String WholeState->Bool
+fetchTurn (Left errMsg) = error errMsg
+fetchTurn (Right (WholeState _ _ _ whoseTurn _)) = whoseTurn
