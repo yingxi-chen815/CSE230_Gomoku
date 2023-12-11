@@ -3,7 +3,7 @@ module Client (startClient, placePawn, getEnemyPawn, handleGame) where
 import Network.Socket
 import System.IO
 import Control.Monad (unless, when)
-import Logic (WholeState(..), WholeBoard(..), BoardDotStat(..), PlayerSide(..),getDotStat, placePawn, iPlacePawn, enemyPlacePawn, initWholeState,fetchTurn, PlayerSide, WinStat(..))
+import Logic
 import Data.List.Split (splitOn)
 
 type Coordinate = (Int, Int)
@@ -38,38 +38,87 @@ parseCoordinate s = let [x, y] = map read $ splitOn "," s
 -- 在 handleGame 函数中处理角色分配
 handleGame :: Handle -> IO ()
 handleGame handle = do
-    sideMsg <- hGetLine handle
-    putStrLn sideMsg -- 打印出角色信息
+    -- sideMsg <- hGetLine handle
+    -- putStrLn sideMsg -- 打印出角色信息
 
-    let isPlayerBlack = sideMsg == "You are Black"
-    let size = 10
-    let playCh = if isPlayerBlack then 'b' else 'w'
-    let whState = initWholeState size playCh
+    -- let isPlayerBlack = sideMsg == "You are Black"
+    -- let size = 10
+    -- let playCh = if isPlayerBlack then 'b' else 'w'
+    -- let whState = initWholeState size playCh
 
-    gameLoop handle whState isPlayerBlack
+    whState@(WholeState wb ps (y,x) isMyTurn ws)<-initBoard handle
+    print whState
+    if ps==WhitePlayer then do
+        enemyPwRes<-updateEnemyPawn handle whState
+        case enemyPwRes of
+                        Left err2->do
+                            putStrLn err2
+                            putStrLn "enemy cheating, game ends"
+                        Right newState2->do
+                            gameLoop handle newState2
+    else do
+        gameLoop handle whState
 
 -- 游戏循环
-gameLoop :: Handle -> WholeState -> Bool -> IO ()
-gameLoop handle whState isPlayer = do
+gameLoop :: Handle -> WholeState -> IO ()
+gameLoop handle whState@(WholeState wb ps (y,x) isMyTurn ws) = do
     print whState
-    if isPlayer
-    then do
-        coord <- getCoordinatesFromCommandLine
-        case updateBoardState whState coord isPlayer of
-            Left err -> do
-                putStrLn err
-                gameLoop handle whState isPlayer
-            Right newState -> do
-                sendMyPawn coord handle
-                gameLoop handle newState (not isPlayer)
+    ch<-getCommand
+    putStrLn ("your command: "++[ch])
+    if ch=='w' then do
+        let newWhState = moveCursor whState DirUp 
+        gameLoop handle newWhState
+    else if ch=='a' then do
+        let newWhState = moveCursor whState DirLeft 
+        gameLoop handle newWhState
+    else if ch=='s' then do
+        let newWhState = moveCursor whState DirDown 
+        gameLoop handle newWhState
+    else if ch=='d' then do
+        let newWhState = moveCursor whState DirRight 
+        gameLoop handle newWhState
+    else if ch=='e' then do
+        -- if ps==BlackPlayer then do
+            placePwRes<-iPlacePawnAtCursor handle whState
+            case placePwRes of 
+                Left err->do
+                    putStrLn err
+                    gameLoop handle whState
+                Right newState->do
+                    print newState
+                    putStrLn "\n"
+                    enemyPwRes<-updateEnemyPawn handle newState
+                    case enemyPwRes of
+                        Left err2->do
+                            putStrLn err2
+                            putStrLn "enemy cheating, game ends"
+                        Right newState2->do
+                            gameLoop handle newState2
     else do
-        coord <- getEnemyPawn handle
-        case updateBoardState whState coord isPlayer of
-            Left err -> do
-                putStrLn err
-                gameLoop handle whState isPlayer
-            Right newState -> do
-                gameLoop handle newState (not isPlayer)
+        gameLoop handle whState
+
+    -- gameLoop handle whState
+
+    -- print whState
+    -- let isPlayer = isMyTurn
+    -- if isPlayer
+    -- then do
+    --     coord <- getCoordinatesFromCommandLine
+    --     case updateBoardState whState coord isPlayer of
+    --         Left err -> do
+    --             putStrLn err
+    --             gameLoop handle whState
+    --         Right newState -> do
+    --             sendMyPawn coord handle
+    --             gameLoop handle newState
+    -- else do
+    --     coord <- getEnemyPawn handle
+    --     case updateBoardState whState coord isPlayer of
+    --         Left err -> do
+    --             putStrLn err
+    --             gameLoop handle whState
+    --         Right newState -> do
+    --             gameLoop handle newState
 
 -- 更新棋盘状态
 updateBoardState :: WholeState -> Coordinate -> Bool -> Either String WholeState
@@ -85,6 +134,23 @@ getCoordinatesFromCommandLine = do
     hFlush stdout  -- 确保提示信息立即打印
     parseCoordinate <$> getLine
 
+mustGetLine::IO String
+mustGetLine = do
+    res<-getLine
+    if res==""
+        then
+            mustGetLine
+        else do
+            return res
+
+getCommand::IO Char
+getCommand = do
+    putStrLn "Enter your command char:"
+    hFlush stdout
+    line<-mustGetLine
+    return (line!!0)
+
+
 iPlacePawnAtCursor :: Handle -> WholeState -> IO (Either String WholeState)
 iPlacePawnAtCursor handle (WholeState wb ps (y, x) b ws) = do
     let placePawnResult = placePawn (WholeState wb ps (y, x) b ws) (y, x) True
@@ -97,73 +163,20 @@ iPlacePawnAtCursor handle (WholeState wb ps (y, x) b ws) = do
             -- 无效移动，返回错误信息
             return $ Left errorMsg
 
--- updateEnemyPawn :: Handle -> IO WholeState
--- updateEnemyPawn handle = do
---     -- 向服务器发送请求
---     hPutStrLn handle "request latest wholestate"
---     -- 等待并接收响应
---     response <- hGetLine handle
---     -- 解析响应为 WholeState
---     let wholeState = parseWholeState response-- 解析逻辑 (依赖于数据格式)
---     -- 返回 WholeState
---     return wholeState
+iPlacePawnUntilCorrect::Handle -> WholeState -> IO (Either String WholeState)
+iPlacePawnUntilCorrect handle (WholeState wb ps (y, x) b ws) = do
+    iPlacePawnAtCursorRes <- iPlacePawnAtCursor handle (WholeState wb ps (y, x) b ws)
+    case iPlacePawnAtCursorRes of
+        Right newWholeState->do
+            return iPlacePawnAtCursorRes
+        Left errMsg->do
+            putStrLn errMsg
+            iPlacePawnUntilCorrect handle (WholeState wb ps (y, x) b ws)
 
 updateEnemyPawn :: Handle -> WholeState -> IO (Either String WholeState)
 updateEnemyPawn handle ws = do
     (y,x)<-getEnemyPawn handle
     return (enemyPlacePawn ws (y,x)) 
--- initBoard::Handle->IO WholeBoardState
-
--- -- 解析从服务器接收到的字符串为 WholeState
--- parseWholeState :: String -> WholeState
--- parseWholeState str =
---     let [boardStr, playerStr, coordStr, boolStr, winStatStr] = splitOn ";" str
---         board = parseWholeBoard boardStr
---         playerSide = parsePlayerSide playerStr
---         (x, y) = parseCoordinate coordStr
---         boolValue = read boolStr :: Bool
---         winStat = parseWinStat winStatStr
---     in WholeState board playerSide (x, y) boolValue winStat
-
-
--- -- 解析 BoardDotStat
--- boardDotStatCons :: Char -> BoardDotStat
--- boardDotStatCons 'b' = BlackPawn
--- boardDotStatCons 'w' = WhitePawn
--- boardDotStatCons '.' = EmptyDot
-
--- -- 将单行字符串转换为 BoardDotStat 列表
--- fromString :: String -> [BoardDotStat]
--- fromString str = map boardDotStatCons str
-
--- -- 将字符串列表转换为二维 BoardDotStat 列表
--- fromStrings :: [String] -> [[BoardDotStat]]
--- fromStrings strs = map fromString strs
-
--- -- 解析整个棋盘
--- parseWholeBoard :: String -> WholeBoard
--- parseWholeBoard str =
---     let sizeAndRows = splitOn ";" str
---         size = read (head sizeAndRows) :: Int
---         rows = tail sizeAndRows
---         boardRows = fromStrings rows
---     in WholeBoard size boardRows
-
--- -- 解析 PlayerSide
--- parsePlayerSide :: String -> PlayerSide
--- parsePlayerSide "BlackPlayer" = BlackPlayer
--- parsePlayerSide "WhitePlayer" = WhitePlayer
--- -- 添加其他可能的玩家方
-
--- -- 解析坐标
--- -- parseCoordinate :: String -> (Int, Int)
--- -- parseCoordinate s = let [x, y] = map read $ splitOn "," s in (x, y)
-
--- -- 解析 WinStat
--- parseWinStat :: String -> WinStat
--- parseWinStat "InGame" = InGame
--- parseWinStat "Win" = IWin
--- parseWinStat "Lose" = EnemyWin
 
 initBoard::Handle->IO WholeState
 initBoard handle = do

@@ -4,6 +4,7 @@ module Logic(BoardDotStat(..),boardDotStatCons,
              WholeState(..),initWholeState,getCorrespondentPawn,
              moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,placePawn,
              fetchWholeState,
+             Direction(..),
              PlayerSide(..), WinStat(..), fetchWinStat,fetchTurn) where 
 
 import Tools(set2DList)
