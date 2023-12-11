@@ -97,67 +97,79 @@ iPlacePawnAtCursor handle (WholeState wb ps (y, x) b ws) = do
             -- 无效移动，返回错误信息
             return $ Left errorMsg
 
-updateEnemyPawn :: Handle -> IO WholeState
-updateEnemyPawn handle = do
-    -- 向服务器发送请求
-    hPutStrLn handle "request latest wholestate"
-    -- 等待并接收响应
-    response <- hGetLine handle
-    -- 解析响应为 WholeState
-    let wholeState = parseWholeState response-- 解析逻辑 (依赖于数据格式)
-    -- 返回 WholeState
-    return wholeState
+-- updateEnemyPawn :: Handle -> IO WholeState
+-- updateEnemyPawn handle = do
+--     -- 向服务器发送请求
+--     hPutStrLn handle "request latest wholestate"
+--     -- 等待并接收响应
+--     response <- hGetLine handle
+--     -- 解析响应为 WholeState
+--     let wholeState = parseWholeState response-- 解析逻辑 (依赖于数据格式)
+--     -- 返回 WholeState
+--     return wholeState
 
+updateEnemyPawn :: Handle -> WholeState -> IO (Either String WholeState)
+updateEnemyPawn handle ws = do
+    (y,x)<-getEnemyPawn handle
+    return (enemyPlacePawn ws (y,x)) 
 -- initBoard::Handle->IO WholeBoardState
 
--- 解析从服务器接收到的字符串为 WholeState
-parseWholeState :: String -> WholeState
-parseWholeState str =
-    let [boardStr, playerStr, coordStr, boolStr, winStatStr] = splitOn ";" str
-        board = parseWholeBoard boardStr
-        playerSide = parsePlayerSide playerStr
-        (x, y) = parseCoordinate coordStr
-        boolValue = read boolStr :: Bool
-        winStat = parseWinStat winStatStr
-    in WholeState board playerSide (x, y) boolValue winStat
+-- -- 解析从服务器接收到的字符串为 WholeState
+-- parseWholeState :: String -> WholeState
+-- parseWholeState str =
+--     let [boardStr, playerStr, coordStr, boolStr, winStatStr] = splitOn ";" str
+--         board = parseWholeBoard boardStr
+--         playerSide = parsePlayerSide playerStr
+--         (x, y) = parseCoordinate coordStr
+--         boolValue = read boolStr :: Bool
+--         winStat = parseWinStat winStatStr
+--     in WholeState board playerSide (x, y) boolValue winStat
 
 
--- 解析 BoardDotStat
-boardDotStatCons :: Char -> BoardDotStat
-boardDotStatCons 'b' = BlackPawn
-boardDotStatCons 'w' = WhitePawn
-boardDotStatCons '.' = EmptyDot
+-- -- 解析 BoardDotStat
+-- boardDotStatCons :: Char -> BoardDotStat
+-- boardDotStatCons 'b' = BlackPawn
+-- boardDotStatCons 'w' = WhitePawn
+-- boardDotStatCons '.' = EmptyDot
 
--- 将单行字符串转换为 BoardDotStat 列表
-fromString :: String -> [BoardDotStat]
-fromString str = map boardDotStatCons str
+-- -- 将单行字符串转换为 BoardDotStat 列表
+-- fromString :: String -> [BoardDotStat]
+-- fromString str = map boardDotStatCons str
 
--- 将字符串列表转换为二维 BoardDotStat 列表
-fromStrings :: [String] -> [[BoardDotStat]]
-fromStrings strs = map fromString strs
+-- -- 将字符串列表转换为二维 BoardDotStat 列表
+-- fromStrings :: [String] -> [[BoardDotStat]]
+-- fromStrings strs = map fromString strs
 
--- 解析整个棋盘
-parseWholeBoard :: String -> WholeBoard
-parseWholeBoard str =
-    let sizeAndRows = splitOn ";" str
-        size = read (head sizeAndRows) :: Int
-        rows = tail sizeAndRows
-        boardRows = fromStrings rows
-    in WholeBoard size boardRows
+-- -- 解析整个棋盘
+-- parseWholeBoard :: String -> WholeBoard
+-- parseWholeBoard str =
+--     let sizeAndRows = splitOn ";" str
+--         size = read (head sizeAndRows) :: Int
+--         rows = tail sizeAndRows
+--         boardRows = fromStrings rows
+--     in WholeBoard size boardRows
 
--- 解析 PlayerSide
-parsePlayerSide :: String -> PlayerSide
-parsePlayerSide "BlackPlayer" = BlackPlayer
-parsePlayerSide "WhitePlayer" = WhitePlayer
--- 添加其他可能的玩家方
+-- -- 解析 PlayerSide
+-- parsePlayerSide :: String -> PlayerSide
+-- parsePlayerSide "BlackPlayer" = BlackPlayer
+-- parsePlayerSide "WhitePlayer" = WhitePlayer
+-- -- 添加其他可能的玩家方
 
--- 解析坐标
--- parseCoordinate :: String -> (Int, Int)
--- parseCoordinate s = let [x, y] = map read $ splitOn "," s in (x, y)
+-- -- 解析坐标
+-- -- parseCoordinate :: String -> (Int, Int)
+-- -- parseCoordinate s = let [x, y] = map read $ splitOn "," s in (x, y)
 
--- 解析 WinStat
-parseWinStat :: String -> WinStat
-parseWinStat "InGame" = InGame
-parseWinStat "Win" = IWin
-parseWinStat "Lose" = EnemyWin
+-- -- 解析 WinStat
+-- parseWinStat :: String -> WinStat
+-- parseWinStat "InGame" = InGame
+-- parseWinStat "Win" = IWin
+-- parseWinStat "Lose" = EnemyWin
 
+initBoard::Handle->IO WholeState
+initBoard handle = do
+    sideMsg <- hGetLine handle
+    let isPlayerBlack = sideMsg == "You are Black"
+    let size = 10
+    let playCh = if isPlayerBlack then 'b' else 'w'
+    let wholeState = initWholeState size playCh
+    return wholeState
