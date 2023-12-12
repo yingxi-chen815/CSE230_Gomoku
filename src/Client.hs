@@ -1,4 +1,4 @@
-module Client (startClient, placePawn, getEnemyPawn, handleGame) where
+module Client (startClient, placePawn, getEnemyPawn, handleGame, initBoard, iPlacePawnAtCursor, updateEnemyPawn) where
 
 import Network.Socket
 import System.IO
@@ -174,9 +174,12 @@ iPlacePawnUntilCorrect handle (WholeState wb ps (y, x) b ws) = do
             iPlacePawnUntilCorrect handle (WholeState wb ps (y, x) b ws)
 
 updateEnemyPawn :: Handle -> WholeState -> IO (Either String WholeState)
-updateEnemyPawn handle ws = do
-    (y,x)<-getEnemyPawn handle
-    return (enemyPlacePawn ws (y,x)) 
+updateEnemyPawn handle ws@(WholeState _ _ _ flag _) =
+  if flag
+    then return $ Right ws
+    else do
+      (y, x) <- getEnemyPawn handle
+      return (enemyPlacePawn ws (y, x))
 
 initBoard::Handle->IO WholeState
 initBoard handle = do

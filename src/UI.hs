@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module UI where
 
 import Brick
@@ -6,19 +8,27 @@ import Brick.Types
 import Brick.Widgets.Border
 import Brick.Widgets.Border.Style
 import Brick.Widgets.Center
+import Client
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad (forever)
+import Control.Monad.IO.Class (liftIO)
 import Graphics.Vty (mkVty)
 import Graphics.Vty.Attributes
 import Graphics.Vty.Config
 import Graphics.Vty.Input.Events
 import Logic
+import System.IO
 
 data Name = CursorName deriving (Eq, Ord)
 
 data Tick = Tick
 
-app :: App WholeState Tick Name
+data UIState = UIState
+  { wholeState :: WholeState,
+    handle :: Handle
+  }
+
+app :: App UIState Tick Name
 -- data App s e n = App
 --   { appDraw :: s -> [Widget n],
 --     appChooseCursor :: s -> [CursorLocation n] -> Maybe (CursorLocation n),
@@ -61,23 +71,25 @@ drawBoard (WholeBoard _ board) = unlines $ interleaveEmptyLines (map drawRow boa
     interleaveEmptyLines [] = []
     interleaveEmptyLines [x] = [x]
     interleaveEmptyLines (x : xs) = x : "" : interleaveEmptyLines xs
+
 -- drawBoard (WholeBoard _ board) = unlines $ map drawRow board
 
-drawRawRow::[BoardDotStat]->String
+drawRawRow :: [BoardDotStat] -> String
 drawRawRow row = concatMap show row
 
 drawRawBoard :: WholeBoard -> String
 drawRawBoard (WholeBoard _ board) = show board
 
 -- -- Draw the user interface
-drawUI :: WholeState -> [Widget Name]
-drawUI (WholeState wholeBoard _ (cursorY, cursorX) _ _) =
-  [ showCursor
-      CursorName
-      (Brick.Types.Location (cursorX * 3, cursorY * 2))
-      $ str
-      $ drawBoard wholeBoard
-  ]
+drawUI :: UIState -> [Widget Name]
+drawUI uiState =
+  let (WholeState wholeBoard _ (cursorY, cursorX) _ _) = wholeState uiState
+   in [ showCursor
+          CursorName
+          (Brick.Types.Location (cursorX * 3, cursorY * 2))
+          $ str
+          $ drawBoard wholeBoard
+      ]
 
 -- Define the App structure
 -- app :: App WholeBoard e n -- 'e' and 'n' should be replaced with actual types
@@ -97,30 +109,62 @@ drawUI (WholeState wholeBoard _ (cursorY, cursorX) _ _) =
 -- handleEvent :: BrickEvent Name Tick -> WholeState -> EventM Name WholeState()
 -- handleEvent g (AppEvent Tick) = moveCursor state DirLeft
 
-handleEvent :: BrickEvent Name Tick -> EventM Name WholeState ()
-handleEvent (AppEvent Tick) = do
-  modify $ \state -> state
-handleEvent (VtyEvent (EvKey key [])) = do
-  modify $ \state -> case key of
-    KUp -> moveCursor state DirUp
-    KDown -> moveCursor state DirDown
-    KLeft -> moveCursor state DirLeft
-    KRight -> moveCursor state DirRight
-    KEnter -> case placePawnAtCursor state of
-      Right newState -> newState
-      Left errMsg -> state
-    _ -> state
-handleEvent _ = return ()
+moveUICursor :: UIState -> Logic.Direction -> UIState
+moveUICursor uiState dir =
+  let ws = wholeState uiState
+      newWholeState = moveCursor ws dir
+   in uiState {wholeState = newWholeState}
 
--- handleEvent gameState event =
---   -- Event handling logic goes here
---   -- This is where you update your game state in response to user inputs
---   return gameState -- Return the updated game state
+handleEvent :: BrickEvent Name Tick -> EventM Name UIState ()
+handleEvent (AppEvent Tick) = do
+  state <- get
+  case winStatus (wholeState state) of
+    IWin -> liftIO (putStrLn "You won the game!")
+    EnemyWin -> liftIO (putStrLn "You lost the game.") 
+    InGame -> continueGame state
+  where
+    winStatus (WholeState _ _ _ _ winStat) = winStat
+
+
+-- handleEvent (AppEvent Tick) = do
+--   state <- get
+--   liftIO (updateEnemyPawn (handle state) (wholeState state)) >>= \case
+--     Left _ -> put $ state
+--     Right newState -> put (state {wholeState = newState})
+
+handleEvent (VtyEvent (EvKey key [])) = do
+  state <- get
+  case key of
+    KUp -> modify $ \state -> moveUICursor state DirUp
+    KDown -> modify $ \state -> moveUICursor state DirDown
+    KLeft -> modify $ \state -> moveUICursor state DirLeft
+    KRight -> modify $ \state -> moveUICursor state DirRight
+    KEnter -> handleEnter state
+    _ -> return ()
+
+continueGame :: UIState -> EventM Name UIState ()
+continueGame state = do
+  result <- liftIO (updateEnemyPawn (handle state) (wholeState state))
+  case result of
+    Left _ -> put $ state
+    Right newState -> put (state {wholeState = newState})
+
+
+handleEnter :: UIState -> EventM Name UIState ()
+handleEnter state = do
+  let ws = wholeState state
+      hd = handle state
+  result <- liftIO $ iPlacePawnAtCursor hd ws
+  case result of
+    Right newState -> put $ state {wholeState = newState}
+    Left _ -> return ()
 
 -- The main function to run the UI
-runUI :: IO ()
-runUI = do
-  let initialState = initWholeState 10 'b'
+runUI :: Handle -> IO ()
+runUI handle = do
+  -- let initialState = initWholeState 10 'b'
+  wholeState <- initBoard handle
+  let uiState = UIState wholeState handle
   -- finalState <- defaultMain app initialState
   let buildVty = mkVty defaultConfig
   initialVty <- buildVty
@@ -135,5 +179,5 @@ runUI = do
       buildVty
       (Just eventChan)
       app
-      initialState
+      uiState
   return ()

@@ -6,6 +6,7 @@ import Server (startServer)  -- 假设这是您的服务器启动函数
 import Logic(BoardDotStat,boardDotStatCons,
              WholeBoard,initWholeBoard,getDotStat,initWholeState,
              moveCursor,iPlacePawn,placePawnAtCursor,enemyPlacePawn,fetchWholeState)
+import UI (runUI)
 
 main :: IO ()
 main = do
@@ -15,7 +16,7 @@ main = do
         ["client"] -> do
             putStrLn "Starting client..."
             handle <- startClient "127.0.0.1" "3000"
-            handleGame handle
+            runUI handle
         -- 启动服务器
         ["server"] -> do
             putStrLn "Starting server..."
