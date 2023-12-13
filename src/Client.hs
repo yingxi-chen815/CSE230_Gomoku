@@ -8,6 +8,7 @@ import Data.List.Split (splitOn)
 
 import Control.Concurrent
 import Control.Concurrent.MVar
+import Control.Exception
 import System.Timeout
 import Control.Exception (handle)
 
@@ -36,18 +37,17 @@ getEnemyPawn handle = do
     return $ parseCoordinate coordStr
 
 helperIO :: (a -> IO b) -> Int -> a -> IO (Maybe b)
-helperIO action timeoutMicroS input = do
+helperIO action timeoutMicroS input = mask_ $ do
     mvar <- newEmptyMVar
-
-    -- Fork a new thread to run the IO action
     tid <- forkIO $ do
         result <- action input
         putMVar mvar result
-
-    -- Wait for the result with a timeout
     result <- timeout timeoutMicroS (takeMVar mvar)
-    killThread tid
-    return result
+    case result of
+        Nothing -> do
+            killThread tid  -- Kill the thread if it timed out
+            return Nothing
+        Just v  -> return (Just v)  -- Return the result if it completed in time
 
 nonBlockingGetEnemyPawn::Handle->Int->IO (Maybe Coordinate)
 nonBlockingGetEnemyPawn h timeoutMicroS=helperIO getEnemyPawn timeoutMicroS h
