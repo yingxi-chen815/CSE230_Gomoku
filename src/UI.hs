@@ -141,10 +141,11 @@ handleEvent (VtyEvent (EvKey key [])) = do
     KRight -> modify $ \state -> moveUICursor state DirRight
     KEnter -> handleEnter state
     _ -> return ()
+handleEvent (VtyEvent (EvResize _ _)) = return ()
 
 continueGame :: UIState -> EventM Name UIState ()
 continueGame state = do
-  result <- liftIO (updateEnemyPawn (handle state) (wholeState state))
+  result <- liftIO (updateEnemyPawnNonBlocking (handle state) (wholeState state))
   case result of
     Left _ -> put $ state
     Right newState -> put (state {wholeState = newState})
@@ -171,7 +172,7 @@ runUI handle = do
   eventChan <- newBChan 10
   forkIO $ forever $ do
     writeBChan eventChan Tick
-    threadDelay 2000000
+    threadDelay 1000
 
   finalState <-
     customMain

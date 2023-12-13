@@ -1,10 +1,15 @@
-module Client (startClient, placePawn, getEnemyPawn, handleGame, initBoard, iPlacePawnAtCursor, updateEnemyPawn) where
+module Client (startClient, placePawn, getEnemyPawn, handleGame, initBoard, iPlacePawnAtCursor, updateEnemyPawn,updateEnemyPawnNonBlocking) where
 
 import Network.Socket
 import System.IO
 import Control.Monad (unless, when)
 import Logic
 import Data.List.Split (splitOn)
+
+import Control.Concurrent
+import Control.Concurrent.MVar
+import System.Timeout
+import Control.Exception (handle)
 
 type Coordinate = (Int, Int)
 
@@ -29,6 +34,24 @@ getEnemyPawn :: Handle -> IO Coordinate
 getEnemyPawn handle = do
     coordStr <- hGetLine handle
     return $ parseCoordinate coordStr
+
+helperIO :: (a -> IO b) -> Int -> a -> IO (Maybe b)
+helperIO action timeoutMicroS input = do
+    mvar <- newEmptyMVar
+
+    -- Fork a new thread to run the IO action
+    tid <- forkIO $ do
+        result <- action input
+        putMVar mvar result
+
+    -- Wait for the result with a timeout
+    result <- timeout timeoutMicroS (takeMVar mvar)
+    killThread tid
+    return result
+
+nonBlockingGetEnemyPawn::Handle->Int->IO (Maybe Coordinate)
+nonBlockingGetEnemyPawn h timeoutMicroS=helperIO getEnemyPawn timeoutMicroS h
+
 
 parseCoordinate :: String -> Coordinate
 parseCoordinate s = let [x, y] = map read $ splitOn "," s
@@ -172,6 +195,16 @@ iPlacePawnUntilCorrect handle (WholeState wb ps (y, x) b ws) = do
         Left errMsg->do
             putStrLn errMsg
             iPlacePawnUntilCorrect handle (WholeState wb ps (y, x) b ws)
+
+updateEnemyPawnNonBlocking::Handle -> WholeState -> IO (Either String WholeState)
+updateEnemyPawnNonBlocking handle ws@(WholeState _ _ _ flag _) =
+  if flag
+    then return $ Right ws
+    else do
+      maybeCoordinate<-nonBlockingGetEnemyPawn handle 10000
+      case maybeCoordinate of
+        Nothing->return $ Right ws
+        (Just (y,x))->return (enemyPlacePawn ws (y, x))
 
 updateEnemyPawn :: Handle -> WholeState -> IO (Either String WholeState)
 updateEnemyPawn handle ws@(WholeState _ _ _ flag _) =
