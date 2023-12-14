@@ -172,7 +172,7 @@ runUI handle = do
   eventChan <- newBChan 10
   forkIO $ forever $ do
     writeBChan eventChan Tick
-    threadDelay 1000
+    threadDelay 100000
 
   finalState <-
     customMain
